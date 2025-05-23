@@ -4,38 +4,53 @@
 // The file is provided as-is without any guarantee or support, and you still need to comply to the licenses of the dependencies of this file.
 
 using LibVLCSharp.Shared;
-using System.IO.Pipelines;
 using ImageSharpMjpegInput;
+using System.Windows.Forms;
+using System.Drawing;
+using System.Threading;
+using System.Threading.Tasks;
 
-Core.Initialize();
-
-using var libVLC = new LibVLC("--demux=mjpeg");
-var pipe = new Pipe();
-using var mediaInput = new PipeMediaInput(pipe.Reader);
-using var media = new Media(libVLC, mediaInput);
-using var mp = new MediaPlayer(media);
-
-var form = new Form();
-
-form.ClientSize = new Size(800, 600);
-
-form.Load += (s, e) =>
+internal class Program
 {
-    mp.Hwnd = form.Handle;
-    mp.Play();
-};
+    private static void Main(string[] args)
+    {
+        Core.Initialize();
 
-form.Show();
+        int framesPerSecond = 4;
+        bool toRTSP = true;
+        JpegMediaPlayer player = new JpegMediaPlayer(framesPerSecond, toRTSP);
 
-var cancellationTokenSource = new CancellationTokenSource();
+        Form? form = null;
 
-var producerTask = Task.Run(() => Producer.Run(pipe.Writer, cancellationTokenSource.Token));
+        if (toRTSP == false)
+        {
+            form = new Form();
+            form.ClientSize = new Size(800, 600);
+            form.Load += (s, e) =>
+            {
+                player.Player.Hwnd = form.Handle;
+                player.Player.Play();
+            };
+            form.Show();
+        }
 
-form.FormClosing += (s, e) =>
-{
-    mp.Stop();
-    cancellationTokenSource.Cancel();
-    Application.Exit();
-};
+        CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
+        Producer producer = new Producer(player.Writer, framesPerSecond, cancellationTokenSource.Token);
+        Task producerTask = producer.Run();
 
-Application.Run();
+        if (toRTSP)
+            player.Player.Play();
+
+        if (form != null)
+        {
+            form.FormClosing += (s, e) =>
+            {
+                player.Player.Stop();
+                cancellationTokenSource.Cancel();
+                Application.Exit();
+            };
+        }
+
+        Application.Run();
+    }
+}

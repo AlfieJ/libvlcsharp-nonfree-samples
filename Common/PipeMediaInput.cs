@@ -3,6 +3,7 @@
 // After payment, the file is considered yours and no copyright notice is required (though it would be appreciated).
 // The file is provided as-is without any guarantee or support, and you still need to comply to the licenses of the dependencies of this file.
 
+using System;
 using System.IO.Pipelines;
 
 namespace LibVLCSharp.Shared
@@ -52,7 +53,7 @@ namespace LibVLCSharp.Shared
         /// <param name="buf">The buffer pointer</param>
         /// <param name="len">The buffer length</param>
         /// <returns>The number of bytes written to the stream, 0 for EOF, -1 for error</returns>
-        public unsafe override int Read(IntPtr buf, uint len)
+        public override unsafe int Read(IntPtr buf, uint len)
         {
             if (this._completed)
             {
@@ -61,7 +62,7 @@ namespace LibVLCSharp.Shared
 
             var readResult = this._reader.ReadAsync().AsTask().GetAwaiter().GetResult();
 
-            if(readResult.IsCanceled)
+            if (readResult.IsCanceled)
             {
                 return -1;
             }
@@ -69,14 +70,14 @@ namespace LibVLCSharp.Shared
             var buffer = (readResult.Buffer.Length > len) ? readResult.Buffer.Slice(0, len) : readResult.Buffer;
             var outputBuffer = new Span<byte>(buf.ToPointer(), (int)len);
 
-            if(buffer.IsSingleSegment)
+            if (buffer.IsSingleSegment)
             {
-                buffer.FirstSpan.CopyTo(outputBuffer);
+                buffer.First.Span.CopyTo(outputBuffer);
             }
             else
             {
                 var outputPosition = 0;
-                foreach(var memory in buffer)
+                foreach (var memory in buffer)
                 {
                     memory.Span.CopyTo(outputBuffer.Slice(outputPosition));
                     outputPosition += memory.Length;
